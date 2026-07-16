@@ -127,7 +127,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                         )
                     }
                 },
-                "required": ["summary", "start_datetime", "end_datetime"]
+                "required": ["summary", "start_datetime"]
             }
         }
     },

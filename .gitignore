@@ -25,4 +25,6 @@ build/
 *.egg-info/
 
 # Local development settings
-.DS_Store 
+.DS_Store
+bookings.db
+

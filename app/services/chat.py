@@ -10,6 +10,7 @@ import logging
 from typing import List, Dict, Any
 import openai
 import anthropic
+import groq
 from ..config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -23,12 +24,16 @@ class ChatService:
         """Initialize chat clients based on configuration."""
         self.provider = settings.ai_provider
         
+        # Async clients — sync clients would block the event loop under load
         if self.provider == "openai":
-            self.client = openai.OpenAI(api_key=settings.openai_api_key)
+            self.client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
             self.model = settings.openai_chat_model
         elif self.provider == "anthropic":
-            self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
             self.model = settings.anthropic_chat_model
+        elif self.provider == "groq":
+            self.client = groq.AsyncGroq(api_key=settings.groq_api_key)
+            self.model = settings.groq_chat_model
         else:
             raise ValueError(f"Unsupported AI provider: {self.provider}")
         
@@ -72,8 +77,8 @@ class ChatService:
                         Please provide an answer based on the context above, including appropriate citations."""
 
         try:
-            if self.provider == "openai":
-                response = self.client.chat.completions.create(
+            if self.provider in ["openai", "groq"]:
+                response = await self.client.chat.completions.create(
                     model=self.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -85,7 +90,7 @@ class ChatService:
                 answer = response.choices[0].message.content
                 
             elif self.provider == "anthropic":
-                response = self.client.messages.create(
+                response = await self.client.messages.create(
                     model=self.model,
                     max_tokens=1000,
                     temperature=settings.temperature,
@@ -98,8 +103,8 @@ class ChatService:
             return answer or "I couldn't generate an answer."
             
         except Exception as e:
-            logger.error(f"Failed to generate answer: {e}")
-            return f"I encountered an error while processing your question: {str(e)}"
+            logger.error(f"Failed to generate answer: {e}", exc_info=True)
+            return "I encountered an error while processing your question. Please try again."
 
 
 # Global service instance

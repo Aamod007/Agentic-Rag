@@ -22,10 +22,10 @@ import json
 from typing import Dict, Any, List, Optional
 import openai
 import anthropic
+import groq
 
 from ..config.settings import get_settings
-from ..config.database import db
-from ..services.embedding import embedding_service
+from ..services.rag import rag_service
 from .tools import tool_registry
 from ..schemas.tool_schemas import TOOL_DEFINITIONS
 
@@ -52,12 +52,16 @@ class AgentService:
         """Initialize the agent service with configured AI provider."""
         self.provider = settings.ai_provider
         
+        # Async clients — sync clients would block the event loop under load
         if self.provider == "openai":
-            self.client = openai.OpenAI(api_key=settings.openai_api_key)
+            self.client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
             self.model = settings.openai_chat_model
         elif self.provider == "anthropic":
-            self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
             self.model = settings.anthropic_chat_model
+        elif self.provider == "groq":
+            self.client = groq.AsyncGroq(api_key=settings.groq_api_key)
+            self.model = settings.groq_chat_model
         else:
             raise ValueError(f"Unsupported AI provider: {self.provider}")
         
@@ -185,7 +189,7 @@ class AgentService:
             logger.error(f"Agent processing failed: {e}", exc_info=True)
             elapsed_ms = int((time.time() - start_time) * 1000)
             return {
-                "text": f"I encountered an error processing your request: {str(e)}",
+                "text": "I encountered an error processing your request. Please try again.",
                 "tool_calls": tool_calls_made,
                 "tool_results": tool_results,
                 "citations": [],
@@ -215,30 +219,10 @@ class AgentService:
             List of context blocks with chunk_id, text, source, similarity
         """
         try:
-            # Generate query embedding
-            query_embedding = await embedding_service.embed_query(query)
+            # Bypass embeddings, just get all documents (minimalist ponytail approach)
+            context_blocks = rag_service.documents[:top_k]
             
-            # Vector similarity search
-            search_results = await db.vector_search(query_embedding, top_k)
-            
-            # Deduplicate by chunk_id prefix (MMR-lite)
-            seen_prefixes = set()
-            context_blocks = []
-            
-            for result in search_results:
-                chunk_id = result.get('chunk_id', '')
-                # Extract base ID (before #) for deduplication
-                base_id = chunk_id.split('#')[0] if '#' in chunk_id else chunk_id
-                
-                if base_id not in seen_prefixes:
-                    context_blocks.append(result)
-                    seen_prefixes.add(base_id)
-                
-                # Limit context to avoid token overflow
-                if len(context_blocks) >= 4:
-                    break
-            
-            logger.info(f"Retrieved {len(context_blocks)} RAG context blocks")
+            logger.info(f"Retrieved {len(context_blocks)} RAG context blocks in-memory")
             return context_blocks
             
         except Exception as e:
@@ -348,7 +332,7 @@ When scheduling events, ALWAYS use the current year ({current_year}) or future d
         Returns:
             Dict with 'content' and optional 'tool_calls'
         """
-        if self.provider == "openai":
+        if self.provider in ["openai", "groq"]:
             return await self._call_openai(messages)
         elif self.provider == "anthropic":
             return await self._call_anthropic(messages)
@@ -368,7 +352,7 @@ When scheduling events, ALWAYS use the current year ({current_year}) or future d
         Returns:
             Dict with 'content' and optional 'tool_calls'
         """
-        response = self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             tools=TOOL_DEFINITIONS,
@@ -426,7 +410,7 @@ When scheduling events, ALWAYS use the current year ({current_year}) or future d
             for t in TOOL_DEFINITIONS
         ]
         
-        response = self.client.messages.create(
+        response = await self.client.messages.create(
             model=self.model,
             max_tokens=1500,
             temperature=settings.temperature,

@@ -32,26 +32,15 @@ class Settings(BaseSettings):
     """
     
     # =========================================================================
-    # Supabase Configuration
-    # =========================================================================
-    supabase_url: str = Field(..., env="SUPABASE_URL")
-    supabase_anon_key: str = Field(..., env="SUPABASE_ANON_KEY")
-    supabase_service_role_key: str = Field(..., env="SUPABASE_SERVICE_ROLE_KEY")
-    
-    # =========================================================================
     # AI Provider Configuration
     # =========================================================================
-    ai_provider: Literal["openai", "anthropic"] = Field(
+    ai_provider: Literal["openai", "anthropic", "groq"] = Field(
         default="openai", 
         env="AI_PROVIDER"
     )
     
     # OpenAI Configuration
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
-    openai_embed_model: str = Field(
-        default="text-embedding-3-small", 
-        env="OPENAI_EMBED_MODEL"
-    )
+    openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_chat_model: str = Field(
         default="gpt-4o", 
         env="OPENAI_CHAT_MODEL"
@@ -62,6 +51,36 @@ class Settings(BaseSettings):
     anthropic_chat_model: str = Field(
         default="claude-3-5-sonnet-20240620", 
         env="ANTHROPIC_CHAT_MODEL"
+    )
+    
+    # Groq Configuration (optional)
+    groq_api_key: str = Field(default="", env="GROQ_API_KEY")
+    groq_chat_model: str = Field(
+        default="llama-3.3-70b-versatile", 
+        env="GROQ_CHAT_MODEL"
+    )
+    
+    # =========================================================================
+    # Cal.com Configuration
+    # =========================================================================
+    # Secrets come from the environment only — never hardcode keys here.
+    cal_api_key: str = Field(default="", env="CAL_API_KEY")
+    cal_username: str = Field(default="", env="CAL_USERNAME")
+    cal_event_type_slug: str = Field(
+        default="agentic", 
+        env="CAL_EVENT_TYPE_SLUG"
+    )
+    
+    # =========================================================================
+    # Email Configuration (for Agentic Tools)
+    # =========================================================================
+    email_user: str = Field(
+        default="", 
+        env="EMAIL_USER"
+    )
+    email_app_password: str = Field(
+        default="", 
+        env="EMAIL_APP_PASSWORD"
     )
     
     # =========================================================================
@@ -91,15 +110,15 @@ class Settings(BaseSettings):
     # =========================================================================
     environment: str = Field(default="development", env="ENVIRONMENT")
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
+    # Comma-separated list of allowed CORS origins. Set to your frontend
+    # origin(s) in production, e.g. "https://yt-agentic-rag.vercel.app"
+    cors_origins: str = Field(default="*", env="CORS_ORIGINS")
     
     # =========================================================================
     # RAG Configuration
     # =========================================================================
     default_top_k: int = Field(default=6)
-    chunk_size: int = Field(default=400)  # Approximate tokens per chunk
-    chunk_overlap: int = Field(default=60)  # 15% overlap between chunks
     temperature: float = Field(default=0.1)  # LLM temperature
-    embedding_dimensions: int = Field(default=1536)  # text-embedding-3-small
     
     # =========================================================================
     # Agent Configuration
@@ -111,6 +130,7 @@ class Settings(BaseSettings):
         """Pydantic configuration."""
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 # Global settings instance

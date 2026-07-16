@@ -9,7 +9,5 @@ This module contains:
 """
 
 from .settings import get_settings, Settings
-from .database import db, Database
 
-__all__ = ['get_settings', 'Settings', 'db', 'Database']
-
+__all__ = ['get_settings', 'Settings']

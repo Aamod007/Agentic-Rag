@@ -23,7 +23,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, JSONResponse
 
 from .config.settings import get_settings
-from .config.database import db
 from .schemas.requests import SeedRequest, AnswerRequest, AgentRequest
 from .schemas.responses import (
     SeedResponse, 
@@ -54,25 +53,15 @@ async def lifespan(app: FastAPI):
     """Application lifespan events for startup and shutdown."""
     # Startup
     logger.info("Starting Agentic RAG API application")
-    
     try:
-        # Initialize database connection
-        await db.connect()
-        
-        # Check database schema
-        await db.initialize_schema()
-        
         logger.info("Application startup completed successfully")
-        
     except Exception as e:
         logger.error(f"Application startup failed: {e}")
         raise
-    
     yield
     
     # Shutdown
     logger.info("Shutting down Agentic RAG API application")
-    await db.disconnect()
 
 
 # Create FastAPI application
@@ -101,16 +90,14 @@ Retrieval-Augmented Generation with autonomous tool-calling capabilities.
     lifespan=lifespan
 )
 
-# Configure CORS for frontend integration
+# CORS: explicit origins from CORS_ORIGINS env (comma-separated).
+# "*" with allow_credentials=True is invalid per the CORS spec, so credentials
+# are only enabled when origins are pinned.
+origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # NextJS default
-        "http://localhost:3001",  # Alternative port
-        "https://yt-agentic-rag.vercel.app",  # Production frontend
-        "*"  # Allow all for development (restrict in production)
-    ],
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials="*" not in origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -154,20 +141,6 @@ async def root():
     }
 
 
-@app.get("/greet/{name}", tags=["General"])
-async def greet(name: str):
-    """
-    Greet endpoint that returns a personalized greeting.
-    
-    Args:
-        name: Name of the person to greet
-        
-    Returns:
-        Personalized greeting message
-    """
-    return {"message": f"Hello, {name}! Welcome to Agentic RAG!"}
-
-
 # ============================================================================
 # Health & Status Endpoints
 # ============================================================================
@@ -175,25 +148,17 @@ async def greet(name: str):
 @app.get("/healthz", response_model=HealthResponse, tags=["Health"])
 async def health_check():
     """
-    Health check endpoint with database connectivity test.
-    
+    Health check endpoint.
+
     Returns:
-        Health status and database connection state
+        Health status and knowledge-base availability
     """
-    try:
-        db_healthy = await db.health_check()
-        
-        return HealthResponse(
-            status="ok" if db_healthy else "degraded",
-            database_connected=db_healthy
-        )
-        
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Service unavailable: {str(e)}"
-        )
+    # ponytail: knowledge base is in-memory, so "database_connected" means
+    # documents are loaded; swap for a real DB ping when Supabase is wired in
+    return HealthResponse(
+        status="ok",
+        database_connected=len(rag_service.documents) > 0
+    )
 
 
 # ============================================================================
@@ -248,11 +213,9 @@ async def seed_documents(request: SeedRequest = SeedRequest()):
         return SeedResponse(inserted=inserted_count)
         
     except Exception as e:
-        logger.error(f"Seeding failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to seed documents: {str(e)}"
-        )
+        logger.error(f"Seeding failed: {e}", exc_info=True)
+        # Don't leak internals to clients — details are in the logs
+        raise HTTPException(status_code=500, detail="Failed to seed documents")
 
 
 # ============================================================================
@@ -301,11 +264,8 @@ async def answer_question(request: AnswerRequest):
         return response
         
     except Exception as e:
-        logger.error(f"RAG query processing failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process query: {str(e)}"
-        )
+        logger.error(f"RAG query processing failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to process query")
 
 
 # ============================================================================
@@ -398,11 +358,8 @@ async def agent_query(request: AgentRequest):
         return response
         
     except Exception as e:
-        logger.error(f"Agent query processing failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process agent query: {str(e)}"
-        )
+        logger.error(f"Agent query processing failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to process agent query")
 
 
 # ============================================================================

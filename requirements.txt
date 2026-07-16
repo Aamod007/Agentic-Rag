@@ -1,35 +1,20 @@
-# yt-agentic-rag requirements
-# Directory: yt-agentic-rag/requirements.txt
-
-# =============================================================================
-# Core Framework
-# =============================================================================
+# Core framework
 fastapi>=0.104.0
 uvicorn>=0.24.0
 python-dotenv>=1.0.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 
-# =============================================================================
-# Database (Supabase with pgvector)
-# =============================================================================
+# HTTP client (Cal.com bookings in calendar_tool)
+httpx>=0.25.0
+
+# Database (Supabase with pgvector) — used by devtools verification scripts
 supabase>=2.0.0
 
-# =============================================================================
-# AI Providers
-# =============================================================================
+# AI providers
 openai>=1.0.0
 anthropic>=0.18.0
+groq>=0.5.0
 
-# =============================================================================
-# Google API (for Agentic Tools - Calendar, Gmail)
-# =============================================================================
-google-api-python-client>=2.100.0
-google-auth>=2.23.0
-google-auth-oauthlib>=1.1.0
-google-auth-httplib2>=0.1.1
-
-# =============================================================================
-# Utilities
-# =============================================================================
+# Devtools terminal UI
 rich>=13.0.0
